@@ -16,84 +16,18 @@ import AUTOutil
 from copy import copy, deepcopy
 import sys
 
-numpyimported = False
-ndarray = AUTOutil.ArrayType
-def importnumpy():
-    global N, numpyimported, fromstring, ndarray, array, rank, take, less
-    global float64, int32, array2string, shape, zeros, ravel, bool8
-    global _seq_types, _num_equivtype, linalg
-    fromstring = None
-    which = ''
-    try:
-        import matplotlib
-        nn = matplotlib.__version__.split('.')
-        if int(nn[0]) == 0 and int(nn[1]) < 99:
-            # matplotlib >= 0.99 forces numpy
-            import matplotlib.numerix
-            which = matplotlib.numerix.which[0]
-    except ImportError:
-        pass
-    # unless matplotlib uses Numeric (which is incompatible) we can use numpy
-    if which != 'numeric':
-        try:
-            import numpy as N
-            from numpy import linalg
-            fromstring, ndarray, float64, int32, bool8, floating, integer = (
-                N.fromstring, N.ndarray, N.float64, N.int32, N.bool,
-                N.floating, N.integer)
-            N.nonzero = N.flatnonzero
-            global _float_types
-            global _int_types
-            _float_types = (type(1), N.floating)
-            _int_types = (type(1), N.integer)
-        except ImportError:
-            try:
-                import numarray as N
-                N.array2string = N.arrayprint.array2string
-                ndarray, float64, int32, bool8 = (
-                    N.ArrayType, N.Float64, N.Int32, N.Bool)
-                def nonzero(x):
-                    return N.deepnonzero(x)[0]
-                N.deepnonzero = N.nonzero
-                N.nonzero = nonzero
-            except ImportError:
-                which = 'numeric'
-    if which == 'numeric':
-        try:
-            try:
-                import platform
-                arch = platform.architecture()[0]
-            except ImportError:
-                arch = ''
-            if arch == '64bit':
-                # Numeric is buggy on 64-bit systems
-                raise ImportError
-            import Numeric as N
-            float64, int32, bool8 = N.Float64, N.Int32, N.UnsignedInt8
-        except ImportError:
-            N = AUTOutil
-            float64, int32, bool8 = 'd', 'i', 'B'
-        ndarray = N.ArrayType
-    rank, array, take, array2string, shape, zeros, less, ravel = (
-        N.rank, N.array, N.take, N.array2string, N.shape, N.zeros, N.less,
-        N.ravel)
-    _seq_types = (list, tuple, ndarray)
-    _num_equivtype = {type(1.0): float64, type(1): int32,
-                      float64: float64, int32: int32,
-                      float: float64, int: int32}
-    numpyimported = True
+import numpy as np
+from numpy import (linalg, fromstring, ndarray, array, take, less, float64,
+                   int32, array2string, shape, zeros, ravel, bool8)
 
-    if fromstring is None:
-        class linalg(object):
-            def norm(v, normord):
-                n = 0.0
-                for x in v:
-                    n += x ** normord
-                return n ** (1.0/normord)
-            norm=staticmethod(norm)
+_float_types = (type(1), np.floating)
+_int_types = (type(1), np.integer)
+_seq_types = (list, tuple, ndarray)
+_num_equivtype = {type(1.0): float64, type(1): int32,
+                  float64: float64, int32: int32,
+                  float: float64, int: int32}
 
-_float_types = type(1.0)
-_int_types = type(1)
+
 
 class symbolMapClass(object):
     """Abstract class for hassle-free symbol re-mappings."""
@@ -397,8 +331,6 @@ class Point(object):
     # suggest how the points belong to a particular space specified
     # using a particular basis)
     def __init__(self, kwd=None, **kw):
-        if not numpyimported:
-            importnumpy()
         if kwd is not None:
             if kw != {}:
                 raise ValueError("Cannot mix keyword dictionary and keywords")
@@ -458,7 +390,7 @@ class Point(object):
                 assert not isinstance(coorddict[c], (list, tuple)), 'type mismatch'
                 datalist.append(coorddict[c][0])
             self.coordarray = array(datalist, self.coordtype)
-            r = rank(self.coordarray)
+            r = self.coordarray.ndim
             if r == 1:
                 pass
             elif r == 0:
@@ -488,7 +420,7 @@ class Point(object):
                 array_temp = array(kw['coordarray'], self.coordtype)
             else:
                 raise TypeError('Coordinate type %s not valid for Point'%str(type(kw['coordarray'])))
-            r = rank(array_temp)
+            r = array_temp.ndim
             if r == 1:
                 self.coordarray = array_temp
             elif r == 0:
@@ -886,8 +818,6 @@ class Point(object):
     def __getstate__(self):
         d = copy(self.__dict__)
         # remove reference to Cfunc type
-        if not numpyimported:
-            importnumpy()
         _num_type2name = {float64: 'float', int32: 'int',
                           type(1.0): 'float', type(1): 'int'}
         d['coordtype'] = _num_type2name[self.coordtype]
@@ -895,8 +825,6 @@ class Point(object):
 
 
     def __setstate__(self, state):
-        if not numpyimported:
-            importnumpy()
         _num_name2type = {'float': float64, 'int': int32}
         self.__dict__.update(state)
         # reinstate Cfunc type
@@ -911,8 +839,6 @@ class Pointset(Point):
     (If present, the independent variable must be a float64 or an int32)"""
 
     def __init__(self, kwd=None, **kw):
-        if not numpyimported:
-            importnumpy()
         if kwd is not None:
             if kw != {}:
                 raise ValueError("Cannot mix keyword dictionary and keywords")
@@ -965,7 +891,7 @@ class Pointset(Point):
             elif isinstance(vals, ndarray):
                 # call 'array' constructor to ensure copy is made in case
                 # either array is independently changed.
-                if rank(vals) == 0:
+                if np.ndim(vals) == 0:
                     self.indepvararray = array(ravel(vals))
                 else:
                     self.indepvararray = array(vals)
@@ -993,7 +919,7 @@ class Pointset(Point):
             except KeyError:
                 raise TypeError('Independent variable type '
                                     '%s not valid'%self.indepvararray.dtype)
-            r=rank(self.indepvararray)
+            r = self.indepvararray.ndim
             if r == 1:
                 pass
             elif r == 0:
@@ -1058,7 +984,7 @@ class Pointset(Point):
                         raise ValueError('All coordinate arrays must have same length')
                 datalist.append(xs)
             self.coordarray = array(datalist, self.coordtype)
-            r = rank(self.coordarray)
+            r = self.coordarray.ndim
             if r == 2:
                 pass
             elif r == 1:
@@ -1083,7 +1009,7 @@ class Pointset(Point):
             # calling 'array' constructor creates a copy if original or new
             # array is altered
             array_temp = array(kw['coordarray'], self.coordtype)
-            r = rank(array_temp)
+            r = array_temp.ndim
             if r == 2:
                 self.coordarray = array_temp
             elif r == 1:
@@ -1892,13 +1818,9 @@ class Pointset(Point):
                 p = [p]
             c = self.coordarray
             l = len(p)
-            if hasattr(N,'resize'):
-                self.coordarray = N.resize(self.coordarray,
-                                           (c.shape[0]+l,c.shape[1]))
-                self.coordarray[self.dimension:,:] = 0
-            else:
-                for i in range(l):
-                    c.append(array([0]*len(c[0])))
+            self.coordarray = np.resize(self.coordarray,
+                                        (c.shape[0]+l,c.shape[1]))
+            self.coordarray[self.dimension:,:] = 0
             self.coordnames.extend(p)
             self.dimension = self.dimension + l
         else:
@@ -2007,8 +1929,6 @@ class Pointset(Point):
     def __getstate__(self):
         d = copy(self.__dict__)
         # remove reference to Cfunc types by converting them to strings
-        if not numpyimported:
-            importnumpy()
         _num_type2name = {float64: 'float', int32: 'int',
                           type(1.0): 'float', type(1): 'int'}
         try:
@@ -2021,8 +1941,6 @@ class Pointset(Point):
 
 
     def __setstate__(self, state):
-        if not numpyimported:
-            importnumpy()
         _num_name2type = {'float': float64, 'int': int32}
         self.__dict__.update(state)
         # reinstate Cfunc types
@@ -2568,9 +2486,9 @@ def arrayToPointset(a, vnames=None, ia=None, iname=""):
 
     Coordinate (and independent variable) names are optional: the defaults are
     the array indices (and 't' for the independent variable)."""
-    if rank(a) > 2:
+    if np.ndim(a) > 2:
         raise ValueError("Cannot convert arrays of rank > 2")
-    if rank(a) == 0:
+    if np.ndim(a) == 0:
         raise ValueError("Cannot convert arrays of rank 0")
     if vnames is None:
         vnames = [str(i) for i in range(shape(a)[0])]

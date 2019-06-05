@@ -29,6 +29,7 @@ try:
     file
 except NameError: #Python 3
     from io import IOBase as file
+import numpy as np
 import AUTOExceptions
 import copy
 import parseB
@@ -145,11 +146,8 @@ class fileS(object):
         return solution['data']
 
     def readfloats(self, i, total):
-        if not Points.numpyimported:
-            Points.importnumpy()       
-        N = Points.N
         data = self.readstr(i)
-        if hasattr(N, "ndarray") and isinstance(data, N.ndarray):
+        if isinstance(data, np.ndarray):
             return data
         fromstring = Points.fromstring
         if fromstring:
@@ -157,8 +155,8 @@ class fileS(object):
             if "D".encode("ascii") not in data:
                 fdata = fromstring(data, dtype=float, sep=' ')
             if fdata == [] or len(fdata) != total:
-                fdata = N.array(map(parseB.AUTOatof,
-                                    data.split()), 'd')
+                fdata = np.array(map(parseB.AUTOatof,
+                                     data.split()), 'd')
             else:
                 #make sure the last element is correct
                 #(fromstring may not do this correctly for a
@@ -168,9 +166,9 @@ class fileS(object):
         else:
             data = data.split()
             try:
-                fdata = N.array(map(float, data), 'd')
+                fdata = np.array(map(float, data), 'd')
             except ValueError:
-                fdata = N.array(map(parseB.AUTOatof, data), 'd')
+                fdata = np.array(map(parseB.AUTOatof, data), 'd')
         if total != len(fdata):
             raise PrematureEndofData
         del self.solutions[i]['data']
@@ -738,8 +736,8 @@ class AUTOSolution(UserDict,Points.Pointset):
                     # reduce solution to one point
                     del self.coordarray
                     del self.indepvararray
-                    self.coordarray = Points.N.array([[0.0]]*max(dict(value)))
-                    self.indepvararray = Points.N.array([0.0])
+                    self.coordarray = np.array([[0.0]]*max(dict(value)))
+                    self.indepvararray = np.array([0.0])
                     self.data.update({"NTST": 1, "NCOL": 0})
                     del self.data["Active ICP"]
                     del self.data["rldot"]
@@ -926,10 +924,6 @@ class AUTOSolution(UserDict,Points.Pointset):
     def __readAll(self):
         if self.__fullyParsed or self.__nodata():
             return
-        if not Points.numpyimported:
-            Points.importnumpy()
-        fromstring = Points.fromstring
-        N = Points.N
         self.__fullyParsed = True
         n = self.__numEntriesPerBlock
         nrows = self.__numSValues
@@ -938,9 +932,9 @@ class AUTOSolution(UserDict,Points.Pointset):
         if self["NTST"] != 0 and self.__numLinesPerEntry > nlinessmall:
             total += 2 * self.__numChangingParameters + (n-1) * nrows
         fdata = self.__input.readfloats(self.__index, total)
-        ups = N.reshape(fdata[:n * nrows],(nrows,n))
+        ups = np.reshape(fdata[:n * nrows],(nrows,n))
         self.indepvararray = ups[:,0]
-        self.coordarray = N.transpose(ups[:,1:])
+        self.coordarray = np.transpose(ups[:,1:])
         j = n * nrows
 
         # Check if direction info is given
@@ -951,8 +945,8 @@ class AUTOSolution(UserDict,Points.Pointset):
             self["rldot"] = fdata[j:j+nfpr]
             j = j + nfpr
             n = n - 1
-            self["udotps"] = N.transpose(
-                N.reshape(fdata[j:j+n * self.__numSValues],(-1,n)))
+            self["udotps"] = np.transpose(
+                np.reshape(fdata[j:j+n * self.__numSValues],(-1,n)))
             udotnames = ["UDOT(%d)"%(i+1) for i in
                          range(self.__numEntriesPerBlock-1)]
             self["udotps"] = Points.Pointset({
@@ -973,9 +967,7 @@ class AUTOSolution(UserDict,Points.Pointset):
 
     def __readarray(self,coordarray,indepvararray=None):
         #init from array
-        if not Points.numpyimported:
-            Points.importnumpy()        
-        N = Points.N
+
         if not hasattr(coordarray[0],'__len__'):
             # point
             indepvararray = [0.0]

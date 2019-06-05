@@ -19,6 +19,7 @@
 
 import os
 import sys
+import numpy as np
 import AUTOExceptions
 import AUTOutil
 try:
@@ -306,12 +307,8 @@ class AUTOBranch(parseBMixin, Points.Pointset):
     def __parse(self):
         if self.__fullyParsed:
             return
-        global N
-        if not Points.numpyimported:
-            Points.importnumpy()
         self.__fullyParsed = True
         fromstring = Points.fromstring
-        N = Points.N
         datalist = self.__datalist
         del self.__datalist
         line0 = datalist[0].split()
@@ -319,30 +316,24 @@ class AUTOBranch(parseBMixin, Points.Pointset):
         ncolumns = len(line0)
         nrows = len(datalist)
         datalist = "".join(datalist)
-        if fromstring: #numpy
-            data = []
-            if "D" not in datalist:
-                data = fromstring(datalist, dtype=float, sep=' ')
-            if len(data) != nrows * ncolumns:
-                data = N.array(map(AUTOatof,datalist.split()), 'd')
-            else:
-                #make sure the last element is correct
-                #(fromstring may not do this correctly for a
-                #string like -2.05071-106)
-                data[-1] = AUTOatof(datalist[datalist.rfind(' ')+1:].strip())
-        else: #numarray, Numeric, array
-            datalist = datalist.split()
-            try:
-                data = N.array(map(float, datalist), 'd')
-            except ValueError:
-                data = N.array(map(AUTOatof, datalist), 'd')
-        data.shape = (-1,ncolumns)
-        coordarray = N.transpose(data[:,4:]).copy()
-        points = data[:,1]
-        if hasattr(N,"concatenate"):
-            stability = self.__parsenumpy(points)
+
+        data = []
+        if "D" not in datalist:
+            data = fromstring(datalist, dtype=float, sep=' ')
+        if len(data) != nrows * ncolumns:
+            data = np.array(map(AUTOatof,datalist.split()), 'd')
         else:
-            stability = self.__parsearray(points)
+            #make sure the last element is correct
+            #(fromstring may not do this correctly for a
+            #string like -2.05071-106)
+            data[-1] = AUTOatof(datalist[datalist.rfind(' ')+1:].strip())
+
+        data.shape = (-1,ncolumns)
+        coordarray = np.transpose(data[:,4:]).copy()
+        points = data[:,1]
+
+        stability = self.__parsenumpy(points)
+
         # add stability info labels
         branchtype = type_translation(self.TY)["short name"]
         for i in stability:
@@ -365,18 +356,16 @@ class AUTOBranch(parseBMixin, Points.Pointset):
             })
 
     def __parsenumpy(self,points):
-        global N
         # stability gives a list of point numbers where the stability
         # changes: the end point of each part is stored
-        stab = N.concatenate((N.nonzero(N.less(points[:-1]*points[1:],0)),
+        stab = np.concatenate((np.flatnonzero(np.less(points[:-1]*points[1:],0)),
                               [len(points)-1]))
-        points = N.less(N.take(points,stab),0)
+        points = np.less(np.take(points,stab),0)
         stab = stab + 1
-        stability = N.where(points,-stab,stab)
+        stability = np.where(points,-stab,stab)
         return stability
 
     def __parsearray(self,points):
-        global N
         # for those without numpy...
         stability = []
         prevpt = points[0]
@@ -567,8 +556,6 @@ class AUTOBranch(parseBMixin, Points.Pointset):
         if isinstance(index, int) and index < 0:
             index = len(self) + index
         if self.__fullyParsed or not isinstance(index, int):
-            if not Points.numpyimported:
-                Points.importnumpy()
             ret = Points.Pointset.__getitem__(self,index)
             if isinstance(ret, Points.Pointset):
                 r = self.__class__(self)
@@ -655,17 +642,13 @@ class AUTOBranch(parseBMixin, Points.Pointset):
         """Subtracts branch branches using interpolation with respect to other
         with monotonically increasing or decreasing reference coordinate ref,
         and starting point pt"""
-        global N
-        if not Points.numpyimported:
-            Points.importnumpy()
-        N = Points.N
         if pt is None:
             index = 0
         elif type(pt) == type(1):
             index = abs(pt) - 1
         else:
             index = pt["index"]
-        coordarray = N.array(self.coordarray)
+        coordarray = np.array(self.coordarray)
         if not isinstance(other,Points.Pointset):
             other = other[0]
         b0 = other[ref]
